@@ -1,0 +1,136 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>SRS Requirement Intelligence Suite</title>
+    <link rel="stylesheet" href="/static/styles.css" />
+  </head>
+  <body>
+    <main class="shell">
+      <section class="hero">
+        <div>
+          <p class="eyebrow">Three-stage SRS intelligence pipeline</p>
+          <h1>SRS Requirement Intelligence Suite</h1>
+          <p class="intro">
+            Extract requirement statements, separate functional from non-functional requirements,
+            and identify NFR categories with a clean audit trail.
+          </p>
+        </div>
+        <div class="status-panel" id="statusPanel">
+          <div class="status-row">
+            <span>Model 1</span>
+            <strong id="model1Status">Checking</strong>
+          </div>
+          <div class="status-row">
+            <span>Model 2</span>
+            <strong id="model2Status">Checking</strong>
+          </div>
+          <div class="status-row">
+            <span>Model 3</span>
+            <strong id="model3Status">Checking</strong>
+          </div>
+        </div>
+      </section>
+
+      <section class="workspace">
+        <form class="input-panel" id="analyzeForm">
+          <div class="panel-head">
+            <div>
+              <p class="section-kicker">Input</p>
+              <h2>Analyze an SRS document</h2>
+            </div>
+            <button class="primary-button" type="submit">
+              <span class="button-icon">↗</span>
+              Analyze
+            </button>
+          </div>
+
+          <label class="upload-box" for="fileInput">
+            <input id="fileInput" name="file" type="file" accept=".txt,.pdf,.docx" />
+            <span class="upload-icon">+</span>
+            <span>
+              <strong>Upload TXT, PDF, or DOCX</strong>
+              <small id="fileName">No file selected</small>
+            </span>
+          </label>
+
+          <div class="divider"><span>or paste SRS text</span></div>
+
+          <textarea
+            id="srsText"
+            name="text"
+            spellcheck="true"
+            placeholder="Paste the SRS content here. Example: The system shall allow users to reset passwords. The application must respond within 2 seconds."
+          ></textarea>
+        </form>
+
+        <aside class="insight-panel">
+          <p class="section-kicker">Live Summary</p>
+          <div class="metric-grid">
+            <div class="metric">
+              <span>Candidates</span>
+              <strong id="metricCandidates">0</strong>
+            </div>
+            <div class="metric">
+              <span>Requirements</span>
+              <strong id="metricRequirements">0</strong>
+            </div>
+            <div class="metric">
+              <span>Functional</span>
+              <strong id="metricFunctional">0</strong>
+            </div>
+            <div class="metric">
+              <span>NFR</span>
+              <strong id="metricNfr">0</strong>
+            </div>
+          </div>
+          <div class="type-stack" id="typeStack">
+            <div class="empty-state">NFR category distribution appears after analysis.</div>
+          </div>
+        </aside>
+      </section>
+
+      <section class="results-panel">
+        <div class="panel-head results-head">
+          <div>
+            <p class="section-kicker">Results</p>
+            <h2>Requirement register</h2>
+          </div>
+          <div class="toolbar">
+            <select id="filterSelect" aria-label="Filter results">
+              <option value="all">All requirements</option>
+              <option value="FR">Functional only</option>
+              <option value="NFR">Non-functional only</option>
+              <option value="Availability">Availability</option>
+              <option value="Performance">Performance</option>
+              <option value="Security">Security</option>
+              <option value="Usability">Usability</option>
+            </select>
+            <button class="secondary-button" id="exportButton" type="button">Export CSV</button>
+          </div>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Requirement</th>
+                <th>FR/NFR</th>
+                <th>NFR Type</th>
+                <th>Confidence</th>
+              </tr>
+            </thead>
+            <tbody id="resultsBody">
+              <tr>
+                <td colspan="4" class="empty-table">Run an analysis to populate the register.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </main>
+
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
+    <script src="/static/app.js"></script>
+  </body>
+</html>
