@@ -16,10 +16,9 @@ ROOT = Path(__file__).resolve().parents[1]
 MODELS_DIR = ROOT / "models"
 
 MODEL1_ARTIFACT = Path(os.getenv("MODEL1_ARTIFACT", MODELS_DIR / "model1_requirement_detector.joblib"))
-MODEL1_METADATA = Path(os.getenv("MODEL1_METADATA", r"C:\Users\ISHVAJEET\Desktop\python\model_data.json"))
 
 MODEL2_DIR = Path(os.getenv("MODEL2_DIR", MODELS_DIR / "FR_requirement_classifier_bert_tiny"))
-MODEL2_FALLBACK_ARTIFACT = Path(os.getenv("MODEL2_FALLBACK_ARTIFACT", MODELS_DIR / "model2_fr_nfr_fallback.joblib"))
+
 
 MODEL3_TRANSFORMER_DIR = os.getenv("MODEL3_TRANSFORMER_DIR", "")
 MODEL3_ARTIFACT = Path(os.getenv("MODEL3_ARTIFACT", MODELS_DIR / "model3_nfr_type_classifier.joblib"))
@@ -164,9 +163,7 @@ class Model2FrNfr:
                 return
         except Exception:
             self.model = None
-        if MODEL2_FALLBACK_ARTIFACT.exists():
-            self.model = SklearnClassifier(MODEL2_FALLBACK_ARTIFACT, {0.0: "Functional", 1.0: "Non-functional"})
-            self.status = "sklearn-fallback"
+        
 
     def predict_one(self, text: str) -> Prediction:
         if self.status == "bert-tiny":
@@ -187,17 +184,8 @@ class Model2FrNfr:
                 confidence=confidence,
                 probabilities={"Functional": float(1 - nfr_prob), "Non-functional": nfr_prob},
             )
-        if isinstance(self.model, SklearnClassifier):
-            pred = self.model.predict_one(text)
-            label_text = str(pred.label)
-            label = 1 if label_text in {"1", "1.0", "Non-functional"} else 0
-            return Prediction(label=label, confidence=pred.confidence, probabilities=pred.probabilities)
-        score = heuristic_nfr_score(text)
-        return Prediction(
-            label=1 if score >= 0.5 else 0,
-            confidence=float(max(score, 1 - score)),
-            probabilities={"Functional": float(1 - score), "Non-functional": float(score)},
-        )
+        
+        raise RuntimeError("[Model2] BERT model is not loaded.")
 
 
 class Model3NfrType:
