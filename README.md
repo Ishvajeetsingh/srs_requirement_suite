@@ -63,6 +63,20 @@ python scripts\train_model3.py
 
 Model 2 will use your saved BERT-tiny folder directly when `transformers` and `torch` are installed. The fallback script is included so the website still works if those libraries are unavailable.
 
+
+## 🤖 Model 3 (DistilBERT NFR Classifier)
+
+The trained model is hosted on Hugging Face:
+
+👉 https://huggingface.co/NISH7732/nfr-classifier
+
+### Usage
+
+```python
+from transformers import AutoTokenizer, AutoModelForSequenceClassification
+
+model = AutoModelForSequenceClassification.from_pretrained("NISH7732/nfr-classifier")
+tokenizer = AutoTokenizer.from_pretrained("NISH7732/nfr-classifier")
 ## Run The Website
 
 ```powershell
