@@ -17,6 +17,8 @@ const statusLabels = {
   "sklearn-fallback": "Fallback",
   unavailable: "Unavailable",
   transformer: "Transformer",
+  huggingface: "Hugging Face",
+  "load-error": "Load error",
 };
 
 function showToast(message) {

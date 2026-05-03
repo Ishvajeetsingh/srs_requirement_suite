@@ -20,8 +20,10 @@ MODEL1_ARTIFACT = Path(os.getenv("MODEL1_ARTIFACT", MODELS_DIR / "model1_require
 MODEL2_DIR = Path(os.getenv("MODEL2_DIR", MODELS_DIR / "FR_requirement_classifier_bert_tiny"))
 
 
+MODEL3_REPO_ID = os.getenv("MODEL3_REPO_ID", "NISH7732/nfr-classifier")
 MODEL3_TRANSFORMER_DIR = os.getenv("MODEL3_TRANSFORMER_DIR", "")
 MODEL3_ARTIFACT = Path(os.getenv("MODEL3_ARTIFACT", MODELS_DIR / "model3_nfr_type_classifier.joblib"))
+MODEL3_ID_FALLBACK = {0: "A", 1: "PE", 2: "SE", 3: "US"}
 
 
 MODEL2_LABELS = {
@@ -113,6 +115,7 @@ class Model1Detector:
     def __init__(self):
         self.status = "heuristic"
         self.model = None
+        self.error = ""
 
         if MODEL1_ARTIFACT.exists():
             try:
@@ -124,9 +127,9 @@ class Model1Detector:
                 print(f"[Model1] Loaded trained model from {MODEL1_ARTIFACT}")
 
             except Exception as e:
-                raise RuntimeError(
-                    f"[Model1] Failed to load model from {MODEL1_ARTIFACT}: {e}"
-                ) from e
+                self.status = "load-error"
+                self.error = str(e)
+                print(f"[Model1] Failed to load model from {MODEL1_ARTIFACT}: {e}")
 
     def predict_one(self, text: str) -> Prediction:
         if self.model:
@@ -142,6 +145,7 @@ class Model1Detector:
 class Model2FrNfr:
     def __init__(self):
         self.status = "unavailable"
+        self.error = ""
         self.threshold = 0.5
         self.model: Any = None
         self.tokenizer: Any = None
@@ -161,7 +165,8 @@ class Model2FrNfr:
                 self.model.eval()
                 self.status = "bert-tiny"
                 return
-        except Exception:
+        except Exception as exc:
+            self.error = str(exc)
             self.model = None
         
 
@@ -185,36 +190,51 @@ class Model2FrNfr:
                 probabilities={"Functional": float(1 - nfr_prob), "Non-functional": nfr_prob},
             )
         
-        raise RuntimeError("[Model2] BERT model is not loaded.")
+        score = heuristic_nfr_score(text)
+        return Prediction(
+            label=1 if score >= 0.5 else 0,
+            confidence=float(max(score, 1 - score)),
+            probabilities={"Functional": float(1 - score), "Non-functional": float(score)},
+        )
 
 
 class Model3NfrType:
     def __init__(self):
         self.status = "heuristic"
+        self.error = ""
         self.model: Any = None
         self.tokenizer: Any = None
         self.device: Any = None
-        if MODEL3_TRANSFORMER_DIR:
-            try:
-                from transformers import AutoModelForSequenceClassification, AutoTokenizer
-                import torch
+        transformer_source = MODEL3_TRANSFORMER_DIR or MODEL3_REPO_ID
+        try:
+            from transformers import AutoModelForSequenceClassification, AutoTokenizer
+            import torch
 
-                path = Path(MODEL3_TRANSFORMER_DIR)
-                self.tokenizer = AutoTokenizer.from_pretrained(str(path), local_files_only=True)
-                self.model = AutoModelForSequenceClassification.from_pretrained(str(path), local_files_only=True)
-                self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-                self.model.to(self.device)
-                self.model.eval()
-                self.status = "transformer"
-                return
-            except Exception:
-                self.model = None
+            if MODEL3_TRANSFORMER_DIR:
+                source = str(Path(MODEL3_TRANSFORMER_DIR))
+                local_only = True
+            else:
+                source = transformer_source
+                local_only = os.getenv("MODEL3_LOCAL_ONLY", "0") == "1"
+            self.tokenizer = AutoTokenizer.from_pretrained(source, local_files_only=local_only)
+            self.model = AutoModelForSequenceClassification.from_pretrained(source, local_files_only=local_only)
+            self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+            self.model.to(self.device)
+            self.model.eval()
+            self.status = "huggingface" if not MODEL3_TRANSFORMER_DIR else "transformer"
+            return
+        except Exception as exc:
+            self.error = str(exc)
+            self.model = None
         if MODEL3_ARTIFACT.exists():
-            self.model = SklearnClassifier(MODEL3_ARTIFACT)
-            self.status = "trained"
+            try:
+                self.model = SklearnClassifier(MODEL3_ARTIFACT)
+                self.status = "trained"
+            except Exception as exc:
+                self.error = str(exc)
 
     def predict_one(self, text: str) -> Prediction:
-        if self.status == "transformer":
+        if self.status in {"transformer", "huggingface"}:
             import torch
 
             inputs = self.tokenizer(text, return_tensors="pt", truncation=True, padding=True, max_length=128)
@@ -223,8 +243,12 @@ class Model3NfrType:
                 logits = self.model(**inputs).logits.detach().cpu().numpy()
             probs = _softmax(logits)[0]
             idx = int(np.argmax(probs))
-            label = self.model.config.id2label.get(idx, str(idx))
-            return Prediction(label=label, confidence=float(probs[idx]), probabilities={label: float(probs[idx])})
+            label = normalize_model3_label(self.model.config.id2label.get(idx, str(idx)), idx)
+            mapped = {}
+            for i, prob in enumerate(probs):
+                mapped_label = normalize_model3_label(self.model.config.id2label.get(i, str(i)), i)
+                mapped[mapped_label] = float(prob)
+            return Prediction(label=label, confidence=float(probs[idx]), probabilities=mapped)
         if isinstance(self.model, SklearnClassifier):
             return self.model.predict_one(text)
         label, probs = heuristic_nfr_type(text)
@@ -271,6 +295,30 @@ def heuristic_nfr_type(text: str) -> tuple[str, dict[str, float]]:
     return label, probs
 
 
+def normalize_model3_label(label: Any, idx: int | None = None) -> str:
+    text = str(label).strip().upper()
+    aliases = {
+        "AVAILABILITY": "A",
+        "A": "A",
+        "PERFORMANCE": "PE",
+        "PE": "PE",
+        "SECURITY": "SE",
+        "SE": "SE",
+        "USABILITY": "US",
+        "US": "US",
+    }
+    if text in aliases:
+        return aliases[text]
+    if text.startswith("LABEL_"):
+        try:
+            return MODEL3_ID_FALLBACK[int(text.split("_", 1)[1])]
+        except (KeyError, ValueError):
+            return text
+    if idx is not None and text.isdigit():
+        return MODEL3_ID_FALLBACK.get(idx, text)
+    return text
+
+
 class RequirementPipeline:
     def __init__(self):
         self.model1 = Model1Detector()
@@ -279,9 +327,14 @@ class RequirementPipeline:
 
     def status(self) -> dict[str, Any]:
         return {
-            "model1": {"status": self.model1.status, "artifact": str(MODEL1_ARTIFACT)},
-            "model2": {"status": self.model2.status, "artifact": str(MODEL2_DIR), "threshold": self.model2.threshold},
-            "model3": {"status": self.model3.status, "artifact": str(MODEL3_ARTIFACT)},
+            "model1": {"status": self.model1.status, "artifact": str(MODEL1_ARTIFACT), "error": self.model1.error},
+            "model2": {"status": self.model2.status, "artifact": str(MODEL2_DIR), "threshold": self.model2.threshold, "error": self.model2.error},
+            "model3": {
+                "status": self.model3.status,
+                "artifact": str(MODEL3_ARTIFACT),
+                "repo": MODEL3_REPO_ID,
+                "error": self.model3.error,
+            },
         }
 
     def analyze(self, text: str) -> dict[str, Any]:
@@ -296,7 +349,7 @@ class RequirementPipeline:
             nfr_type = None
             if int(frnfr.label) == 1:
                 pred3 = self.model3.predict_one(sentence)
-                label = str(pred3.label)
+                label = normalize_model3_label(pred3.label)
                 nfr_type = {
                     "code": label,
                     "name": MODEL3_LABELS.get(label, {}).get("name", label),

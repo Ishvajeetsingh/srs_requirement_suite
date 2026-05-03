@@ -22,27 +22,23 @@ srs_requirement_suite/
     train_model2_fallback.py
     train_model3.py
   models/
-    .gitkeep
+    model1_requirement_detector.joblib
+    FR_requirement_classifier_bert_tiny/
   requirements.txt
   README.md
 ```
 
-## Your Current Source Files
+## Model Sources
 
-The app defaults to these files on your machine:
+The app loads the models in this order:
 
 ```text
-Model 1 metadata: C:\Users\ISHVAJEET\Desktop\python\model_data.json
-Model 1 dataset:  C:\Users\ISHVAJEET\Downloads\requirement_detection_final.csv
-
-Model 2 folder:   C:\Users\ISHVAJEET\Downloads\FR_requirement_classifier_bert_tiny)
-Model 2 dataset:  C:\Users\ISHVAJEET\Downloads\clean_requirements_dataset.csv
-
-Model 3 notebook: C:\Users\ISHVAJEET\Downloads\model3.ipynb
-Model 3 dataset:  C:\Users\ISHVAJEET\Downloads\model3_cleaned_datasetCopy.csv
+Model 1: models/model1_requirement_detector.joblib
+Model 2: models/FR_requirement_classifier_bert_tiny/
+Model 3: Hugging Face repo NISH7732/nfr-classifier
 ```
 
-Important: `model_data.json` contains the Model 1 TF-IDF vocabulary and metadata, but not the trained classifier weights. Model 3 has the notebook and dataset, but no saved model folder. Run the training scripts once to create the missing runnable artifacts.
+Model 1 extracts requirement-like sentences from the SRS document. Model 2 classifies extracted requirements as Functional or Non-functional. Model 3 runs only for Non-functional requirements and classifies them as Availability, Performance, Security, or Usability.
 
 ## Setup
 
@@ -53,7 +49,19 @@ python -m venv .venv
 pip install -r requirements.txt
 ```
 
-## Build Missing Model Artifacts
+## Run The Website
+
+```powershell
+uvicorn app.main:app --reload --port 8000
+```
+
+Open:
+
+```text
+http://127.0.0.1:8000
+```
+
+## Optional: Rebuild Local Artifacts
 
 ```powershell
 python scripts\train_model1.py
@@ -61,32 +69,34 @@ python scripts\train_model2_fallback.py
 python scripts\train_model3.py
 ```
 
-Model 2 will use your saved BERT-tiny folder directly when `transformers` and `torch` are installed. The fallback script is included so the website still works if those libraries are unavailable.
+The website uses the saved Model 1 and Model 2 artifacts by default. The fallback training scripts are kept for reproducibility.
 
+## Environment Overrides
 
-##Environment Overrides
-
-You can point the app at different files with environment variables:
+You can point the app at different model files or repositories with environment variables:
 
 ```powershell
 $env:MODEL1_ARTIFACT="models\model1_requirement_detector.joblib"
-$env:MODEL2_DIR="C:\Users\ISHVAJEET\Downloads\FR_requirement_classifier_bert_tiny)"
-$env:MODEL2_FALLBACK_ARTIFACT="models\model2_fr_nfr_fallback.joblib"
+$env:MODEL2_DIR="models\FR_requirement_classifier_bert_tiny"
+$env:MODEL3_REPO_ID="NISH7732/nfr-classifier"
+$env:MODEL3_LOCAL_ONLY="0"
 $env:MODEL3_ARTIFACT="models\model3_nfr_type_classifier.joblib"
 ```
 
-## 🤖 Model 3 (NFR Subclass Classification)
+## Model 3: NFR Subclass Classification
 
 This model is developed using DistilBERT and hosted on Hugging Face:
 
-👉 https://huggingface.co/NISH7732/nfr-classifier
+https://huggingface.co/NISH7732/nfr-classifier
 
-### Developed by:
+Developed by:
 Nishkarsh Gupta
 
-### Usage:
+Usage:
+
 ```python
 from transformers import AutoTokenizer, AutoModelForSequenceClassification
 
 model = AutoModelForSequenceClassification.from_pretrained("NISH7732/nfr-classifier")
 tokenizer = AutoTokenizer.from_pretrained("NISH7732/nfr-classifier")
+```
