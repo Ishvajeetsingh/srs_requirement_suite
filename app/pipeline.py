@@ -18,7 +18,7 @@ MODELS_DIR = ROOT / "models"
 MODEL1_ARTIFACT = Path(os.getenv("MODEL1_ARTIFACT", MODELS_DIR / "model1_requirement_detector.joblib"))
 MODEL1_METADATA = Path(os.getenv("MODEL1_METADATA", r"C:\Users\ISHVAJEET\Desktop\python\model_data.json"))
 
-MODEL2_DIR = Path(os.getenv("MODEL2_DIR", r"C:\Users\ISHVAJEET\Downloads\FR_requirement_classifier_bert_tiny)"))
+MODEL2_DIR = Path(os.getenv("MODEL2_DIR", MODELS_DIR / "FR_requirement_classifier_bert_tiny"))
 MODEL2_FALLBACK_ARTIFACT = Path(os.getenv("MODEL2_FALLBACK_ARTIFACT", MODELS_DIR / "model2_fr_nfr_fallback.joblib"))
 
 MODEL3_TRANSFORMER_DIR = os.getenv("MODEL3_TRANSFORMER_DIR", "")
@@ -113,12 +113,21 @@ class SklearnClassifier:
 class Model1Detector:
     def __init__(self):
         self.status = "heuristic"
-        self.model: SklearnClassifier | None = None
+        self.model = None
+
         if MODEL1_ARTIFACT.exists():
-            self.model = SklearnClassifier(MODEL1_ARTIFACT, {0: "Non-requirement", 1: "Requirement"})
-            self.status = "trained"
-        elif MODEL1_METADATA.exists():
-            self.status = "metadata-only"
+            try:
+                self.model = SklearnClassifier(
+                    MODEL1_ARTIFACT,
+                    {0: "Non-requirement", 1: "Requirement"}
+                )
+                self.status = "trained"
+                print(f"[Model1] Loaded trained model from {MODEL1_ARTIFACT}")
+
+            except Exception as e:
+                raise RuntimeError(
+                    f"[Model1] Failed to load model from {MODEL1_ARTIFACT}: {e}"
+                ) from e
 
     def predict_one(self, text: str) -> Prediction:
         if self.model:
